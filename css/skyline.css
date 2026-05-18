@@ -1,0 +1,9 @@
+#skyline {
+  cursor: default;
+}
+
+@media (min-width: 900px) {
+  #skyline {
+    border-left: 1px solid var(--bg-panel-border);
+  }
+}

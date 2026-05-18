@@ -1,0 +1,209 @@
+.views {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+.view {
+  position: relative;
+}
+
+body[data-tab="tasks"] #view-city,
+body[data-tab="stats"] #view-city,
+body[data-tab="city"]  #view-tasks,
+body[data-tab="stats"] #view-tasks,
+body[data-tab="city"]  #view-stats,
+body[data-tab="tasks"] #view-stats {
+  display: none !important;
+}
+
+/* TASKS view ----------------------------------------------------- */
+
+#view-tasks {
+  position: fixed;
+  left: 0;
+  right: 0;
+  top: calc(var(--topbar-h) + var(--safe-top));
+  bottom: calc(var(--tabbar-h) + var(--safe-bottom));
+  display: flex;
+  flex-direction: column;
+  background: linear-gradient(180deg, var(--bg-app), var(--bg-panel) 30%, var(--bg-panel-strong));
+  z-index: 1;
+}
+
+.tasks-view {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.tasks-toolbar {
+  position: sticky;
+  top: 0;
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  background: linear-gradient(180deg, var(--bg-panel) 60%, rgba(8, 12, 26, 0));
+  border-bottom: 1px solid var(--bg-panel-border);
+  z-index: 2;
+}
+
+.tasks-toolbar__chips {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 6px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  touch-action: pan-x;
+}
+
+.tasks-toolbar__chips::-webkit-scrollbar {
+  display: none;
+}
+
+.tasks-toolbar__controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  color: var(--text-secondary);
+}
+
+.tasks-toolbar__sort {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.tasks-toolbar__sort-label {
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  color: var(--text-muted);
+  font-size: 10px;
+}
+
+.tasks-toolbar__sort select {
+  font-family: inherit;
+  font-size: 12px;
+  color: var(--text-primary);
+  background: var(--button-bg);
+  border: 1px solid var(--button-border);
+  padding: 4px 8px;
+  letter-spacing: 0.04em;
+  appearance: none;
+  -webkit-appearance: none;
+  cursor: pointer;
+  clip-path: polygon(0 0, calc(100% - 6px) 0, 100% 6px, 100% 100%, 6px 100%, 0 calc(100% - 6px));
+}
+
+.tasks-toolbar__sort select:focus-visible {
+  outline: 2px solid var(--district-color, #00f5ff);
+  outline-offset: -2px;
+}
+
+.tasks-toolbar__toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.tasks-toolbar__toggle input {
+  accent-color: var(--district-color, #00f5ff);
+}
+
+.tasks-view__body {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  padding: 8px 0 24px 0;
+}
+
+.task-list--full {
+  padding: 0;
+}
+
+/* STATS view ----------------------------------------------------- */
+
+#view-stats {
+  position: fixed;
+  left: 0;
+  right: 0;
+  top: calc(var(--topbar-h) + var(--safe-top));
+  bottom: calc(var(--tabbar-h) + var(--safe-bottom));
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  background: linear-gradient(180deg, var(--bg-app), var(--bg-panel) 30%, var(--bg-panel-strong));
+  z-index: 1;
+  padding: 16px 14px 32px 14px;
+}
+
+.rail-toggle {
+  display: none;
+}
+
+/* Desktop sidebar layout: TASKS/STATS replace the rail; canvas stays. */
+
+@media (min-width: 900px) {
+  #view-tasks,
+  #view-stats {
+    left: 0;
+    right: auto;
+    width: var(--sheet-rail-w);
+    top: 0;
+    bottom: 0;
+    padding-top: calc(var(--topbar-h) + var(--safe-top) + 44px);
+    border-right: 1px solid var(--bg-panel-border);
+    background: linear-gradient(180deg, var(--bg-panel) 0%, var(--bg-panel-strong) 100%);
+    box-shadow: 6px 0 30px rgba(0, 0, 0, 0.5);
+  }
+
+  .rail-toggle {
+    display: flex;
+    position: fixed;
+    top: calc(var(--topbar-h) + var(--safe-top) + 6px);
+    left: 8px;
+    width: calc(var(--sheet-rail-w) - 16px);
+    height: 32px;
+    z-index: calc(var(--z-sheet) + 1);
+    gap: 4px;
+    padding: 2px;
+    background: var(--bg-panel-strong);
+    border: 1px solid var(--bg-panel-border);
+    clip-path: polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 8px 100%, 0 calc(100% - 8px));
+  }
+
+  .rail-toggle__item {
+    flex: 1 1 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: 0;
+    color: var(--text-secondary);
+    font-family: 'Orbitron', monospace;
+    font-weight: 700;
+    font-size: 10px;
+    letter-spacing: 0.22em;
+    cursor: pointer;
+    transition: color var(--transition), background var(--transition);
+  }
+
+  .rail-toggle__item:hover {
+    color: var(--text-primary);
+  }
+
+  .rail-toggle__item.is-active {
+    color: var(--text-accent);
+    background: var(--button-hover);
+    box-shadow: 0 0 8px var(--district-color, rgba(0, 245, 255, 0.3)) inset;
+  }
+}

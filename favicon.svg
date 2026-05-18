@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <rect width="64" height="64" rx="6" fill="#04060f"/>
+  <g fill="#00f5ff" opacity="0.95">
+    <rect x="10" y="34" width="8" height="22"/>
+    <rect x="20" y="22" width="10" height="34"/>
+    <rect x="32" y="28" width="8" height="28"/>
+    <rect x="42" y="18" width="10" height="38"/>
+  </g>
+  <g fill="#fff8c0" opacity="0.85">
+    <rect x="12" y="38" width="2" height="2"/>
+    <rect x="14" y="42" width="2" height="2"/>
+    <rect x="22" y="26" width="2" height="2"/>
+    <rect x="26" y="30" width="2" height="2"/>
+    <rect x="22" y="34" width="2" height="2"/>
+    <rect x="34" y="32" width="2" height="2"/>
+    <rect x="36" y="38" width="2" height="2"/>
+    <rect x="44" y="22" width="2" height="2"/>
+    <rect x="48" y="26" width="2" height="2"/>
+    <rect x="44" y="32" width="2" height="2"/>
+    <rect x="48" y="38" width="2" height="2"/>
+    <rect x="44" y="44" width="2" height="2"/>
+  </g>
+  <line x1="0" y1="56" x2="64" y2="56" stroke="#1a2040" stroke-width="1"/>
+  <text x="6" y="11" fill="#c8d4f0" font-family="Orbitron, monospace" font-size="6" font-weight="700" letter-spacing="0.8">CL</text>
+</svg>

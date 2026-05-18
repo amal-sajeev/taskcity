@@ -1,0 +1,283 @@
+.hud-frame {
+  position: relative;
+  --hud-color: var(--district-color, #00f5ff);
+  --hud-cut: 14px;
+}
+
+.hud-frame--top {
+  clip-path: polygon(
+    0 0,
+    calc(100% - var(--hud-cut)) 0,
+    100% var(--hud-cut),
+    100% 100%,
+    var(--hud-cut) 100%,
+    0 calc(100% - 0px)
+  );
+}
+
+.hud-corners {
+  position: relative;
+}
+
+.hud-corners::before,
+.hud-corners::after,
+.hud-corners > .hud-corners__bl,
+.hud-corners > .hud-corners__br {
+  content: '';
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  border: 1px solid var(--hud-color, #00f5ff);
+  pointer-events: none;
+  opacity: 0.55;
+  transition: opacity var(--transition), border-color var(--transition);
+}
+
+.hud-corners::before {
+  top: 4px;
+  left: 4px;
+  border-right: 0;
+  border-bottom: 0;
+}
+
+.hud-corners::after {
+  top: 4px;
+  right: 4px;
+  border-left: 0;
+  border-bottom: 0;
+}
+
+.hud-corners > .hud-corners__bl {
+  bottom: 4px;
+  left: 4px;
+  border-right: 0;
+  border-top: 0;
+}
+
+.hud-corners > .hud-corners__br {
+  bottom: 4px;
+  right: 4px;
+  border-left: 0;
+  border-top: 0;
+}
+
+.hud-corners.is-active::before,
+.hud-corners.is-active::after,
+.hud-corners.is-active > .hud-corners__bl,
+.hud-corners.is-active > .hud-corners__br {
+  opacity: 1;
+  box-shadow: 0 0 6px var(--hud-color);
+}
+
+.hud-scan {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.hud-scan::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0) 0,
+    rgba(255, 255, 255, 0) 3px,
+    rgba(200, 230, 255, 0.025) 3px,
+    rgba(200, 230, 255, 0.025) 4px
+  );
+  pointer-events: none;
+  z-index: 1;
+  mix-blend-mode: screen;
+}
+
+.hud-scan::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: -2px;
+  height: 1px;
+  background: linear-gradient(90deg, rgba(0, 245, 255, 0) 0%, rgba(120, 220, 255, 0.6) 50%, rgba(0, 245, 255, 0) 100%);
+  pointer-events: none;
+  z-index: 2;
+  animation: hudScan 6s linear infinite;
+}
+
+@keyframes hudScan {
+  0%   { transform: translateY(0); opacity: 0; }
+  4%   { opacity: 1; }
+  96%  { opacity: 1; }
+  100% { transform: translateY(120%); opacity: 0; }
+}
+
+.shimmer {
+  position: relative;
+  isolation: isolate;
+}
+
+.shimmer::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    100deg,
+    rgba(255, 255, 255, 0) 0%,
+    rgba(255, 255, 255, 0) 40%,
+    rgba(180, 220, 255, 0.16) 50%,
+    rgba(255, 255, 255, 0) 60%,
+    rgba(255, 255, 255, 0) 100%
+  );
+  background-size: 200% 100%;
+  background-position: -200% 0;
+  pointer-events: none;
+  z-index: 3;
+  mix-blend-mode: screen;
+  animation: hudShimmer 8s ease-in-out infinite;
+}
+
+@keyframes hudShimmer {
+  0%   { background-position: -200% 0; }
+  60%  { background-position: -200% 0; }
+  90%  { background-position: 200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.hud-hex {
+  width: 12px;
+  height: 12px;
+  background: var(--hud-color, #00f5ff);
+  clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%);
+  display: inline-block;
+  filter: drop-shadow(0 0 4px var(--hud-color, #00f5ff));
+  opacity: 0.85;
+  flex: 0 0 auto;
+}
+
+.angled-btn {
+  --hud-color: var(--district-color, #00f5ff);
+  position: relative;
+  clip-path: polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 8px 100%, 0 calc(100% - 8px));
+  background: var(--button-bg);
+  border: 0;
+  padding: 0 14px;
+}
+
+.angled-btn::before {
+  content: '';
+  position: absolute;
+  inset: 1px;
+  background: linear-gradient(180deg, rgba(0, 245, 255, 0.05) 0%, rgba(0, 245, 255, 0.0) 100%);
+  pointer-events: none;
+}
+
+.vignette {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(ellipse at center, rgba(0, 0, 0, 0) 30%, var(--vignette-color, rgba(0, 245, 255, 0)) 100%);
+  opacity: 0;
+  z-index: 70;
+  transition: opacity 200ms ease-out;
+}
+
+.vignette.is-flashing {
+  animation: vignettePulse 500ms ease-out;
+}
+
+@keyframes vignettePulse {
+  0%   { opacity: 0; }
+  20%  { opacity: 0.55; }
+  100% { opacity: 0; }
+}
+
+.toggle {
+  --tg-color: var(--district-color, #00f5ff);
+  appearance: none;
+  -webkit-appearance: none;
+  width: 44px;
+  height: 24px;
+  border-radius: 12px;
+  background: var(--bg-app);
+  border: 1px solid var(--bg-panel-border);
+  position: relative;
+  cursor: pointer;
+  transition: background var(--transition), border-color var(--transition), box-shadow var(--transition);
+  flex: 0 0 auto;
+}
+
+.toggle::before {
+  content: '';
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  top: 3px;
+  left: 3px;
+  background: var(--text-secondary);
+  border-radius: 50%;
+  transition: transform var(--transition), background var(--transition), box-shadow var(--transition);
+}
+
+.toggle:checked {
+  background: rgba(0, 245, 255, 0.12);
+  border-color: var(--tg-color);
+  box-shadow: 0 0 10px var(--tg-color);
+}
+
+.toggle:checked::before {
+  transform: translateX(20px);
+  background: var(--tg-color);
+  box-shadow: 0 0 8px var(--tg-color);
+}
+
+.toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  background: var(--bg-app);
+  border: 1px solid var(--bg-panel-border);
+  border-radius: 3px;
+  margin-bottom: 6px;
+}
+
+.toggle-row__label {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.toggle-row__label strong {
+  font-size: 13px;
+  color: var(--text-primary);
+  font-weight: 500;
+  letter-spacing: 0.04em;
+}
+
+.toggle-row__label small {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-family: 'JetBrains Mono', monospace;
+  letter-spacing: 0.02em;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hud-scan::after,
+  .shimmer::after {
+    animation: none;
+    opacity: 0;
+  }
+  .vignette.is-flashing {
+    animation: none;
+  }
+}
+
+[data-motion="reduce"] .hud-scan::after,
+[data-motion="reduce"] .shimmer::after {
+  animation: none;
+  opacity: 0;
+}
+
+[data-motion="reduce"] .vignette.is-flashing {
+  animation: none;
+}

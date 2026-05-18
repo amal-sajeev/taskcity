@@ -1,0 +1,81 @@
+:root {
+  --bg-app: #04060f;
+  --bg-panel: #080c1a;
+  --bg-panel-strong: #0a1124;
+  --bg-panel-border: #1a2040;
+
+  --sky-top: #04060f;
+  --sky-mid: #070d1f;
+  --sky-horizon: #0d1535;
+
+  --text-primary: #c8d4f0;
+  --text-secondary: #5a6a90;
+  --text-muted: #3d4a6a;
+  --text-accent: #ffffff;
+
+  --district-0: #00f5ff;
+  --district-1: #bf5fff;
+  --district-2: #39ff14;
+  --district-3: #ff6b35;
+  --district-4: #ffd700;
+  --district-5: #ff3d8b;
+
+  --window-lit: #fff8c0;
+  --window-dim: rgba(255, 240, 180, 0.15);
+
+  --button-bg: #111828;
+  --button-border: #2a3560;
+  --button-hover: #1a2540;
+
+  --district-color: #00f5ff;
+
+  --danger: #ff3d4f;
+
+  --topbar-h: 56px;
+  --tabbar-h: 60px;
+  --canvas-reserve: 140px;
+  --mobile-tasks-h: max(180px,
+    min(64dvh,
+      calc(100dvh
+        - var(--topbar-h) - var(--safe-top)
+        - var(--tabbar-h) - var(--safe-bottom)
+        - var(--canvas-reserve))));
+  --sheet-peek: 92px;
+  --sheet-half: 52vh;
+  --sheet-full: 88vh;
+
+  --transition: 150ms ease-out;
+  --transition-snap: 240ms cubic-bezier(0.22, 1, 0.36, 1);
+
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+
+  --z-canvas: 0;
+  --z-topbar: 30;
+  --z-backdrop: 40;
+  --z-sheet: 50;
+  --z-tabbar: 60;
+  --z-modal: 80;
+  --z-toast: 100;
+}
+
+@media (orientation: landscape) and (max-height: 480px) {
+  :root {
+    --canvas-reserve: 100px;
+    --tabbar-h: 52px;
+    --mobile-tasks-h: max(160px,
+      min(60dvh,
+        calc(100dvh
+          - var(--topbar-h) - var(--safe-top)
+          - var(--tabbar-h) - var(--safe-bottom)
+          - var(--canvas-reserve))));
+  }
+}
+
+@media (min-width: 900px) {
+  :root {
+    --topbar-h: 56px;
+    --tabbar-h: 0px;
+    --sheet-rail-w: 360px;
+  }
+}
