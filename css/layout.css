@@ -131,13 +131,30 @@ body[data-tab="stats"] #skyline {
 
 @media (min-width: 900px) {
   .topbar {
-    padding-left: calc(var(--sheet-rail-w) + 18px);
+    /* Switch to grid so the brand can be truly centered in the canvas column */
+    display: grid;
+    grid-template-columns: var(--sheet-rail-w) 1fr auto;
+    align-items: center;
+    padding-left: 0;
+    padding-right: 14px;
+  }
+
+  .topbar__brand {
+    grid-column: 2;
+    justify-self: center;
+    padding-left: 0;
+  }
+
+  .topbar__actions {
+    grid-column: 3;
   }
 
   #skyline {
     left: var(--sheet-rail-w);
     right: 0;
-    width: auto;
+    /* Explicit width overrides the base width:100% and prevents the canvas
+       from measuring as the full viewport width during resize(). */
+    width: calc(100% - var(--sheet-rail-w));
     top: 0;
     bottom: 0;
     height: 100dvh;
