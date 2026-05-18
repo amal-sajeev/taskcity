@@ -136,7 +136,11 @@ body[data-tab="stats"] #skyline {
 
   #skyline {
     left: var(--sheet-rail-w);
-    width: calc(100% - var(--sheet-rail-w));
+    right: 0;
+    width: auto;
+    top: 0;
     bottom: 0;
+    height: 100dvh;
+    min-height: 0;
   }
 }
