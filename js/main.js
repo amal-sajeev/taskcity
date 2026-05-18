@@ -9,6 +9,18 @@ import { mountKeyboard } from './keyboard.js';
 import { mountRouter } from './router.js';
 import { mountStats } from './stats.js';
 
+// window.innerHeight always reflects the real current visible viewport on
+// both iOS Safari and Android Chrome, unlike dvh/svh which can be stale.
+function setViewportHeight() {
+  document.documentElement.style.setProperty('--wih', `${window.innerHeight}px`);
+}
+setViewportHeight();
+window.addEventListener('resize', setViewportHeight, { passive: true });
+// orientationchange fires before innerHeight updates; wait one frame.
+window.addEventListener('orientationchange', () => {
+  requestAnimationFrame(setViewportHeight);
+}, { passive: true });
+
 function boot() {
   store.load();
   settings.attach(store);

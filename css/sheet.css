@@ -4,7 +4,7 @@
   right: 0;
   bottom: calc(var(--tabbar-h) + var(--safe-bottom));
   height: var(--mobile-tasks-h);
-  max-height: calc(100dvh
+  max-height: calc(var(--wih, 100svh)
     - var(--topbar-h) - var(--safe-top)
     - var(--tabbar-h) - var(--safe-bottom));
   background: linear-gradient(180deg, var(--bg-panel) 0%, var(--bg-panel-strong) 100%);

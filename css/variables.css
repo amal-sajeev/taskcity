@@ -34,9 +34,11 @@
   --topbar-h: 56px;
   --tabbar-h: 60px;
   --canvas-reserve: 140px;
+  /* --wih is set by JS (window.innerHeight) for accurate current visible height.
+     Fallback to 100svh (small viewport height = worst-case, all chrome visible). */
   --mobile-tasks-h: max(180px,
-    min(64dvh,
-      calc(100dvh
+    min(calc(var(--wih, 100svh) * 0.64),
+      calc(var(--wih, 100svh)
         - var(--topbar-h) - var(--safe-top)
         - var(--tabbar-h) - var(--safe-bottom)
         - var(--canvas-reserve))));
@@ -64,8 +66,8 @@
     --canvas-reserve: 100px;
     --tabbar-h: 52px;
     --mobile-tasks-h: max(160px,
-      min(60dvh,
-        calc(100dvh
+      min(calc(var(--wih, 100svh) * 0.60),
+        calc(var(--wih, 100svh)
           - var(--topbar-h) - var(--safe-top)
           - var(--tabbar-h) - var(--safe-bottom)
           - var(--canvas-reserve))));
