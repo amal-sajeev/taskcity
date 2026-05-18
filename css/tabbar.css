@@ -1,8 +1,5 @@
 .tabbar {
-  position: fixed;
-  left: 0;
-  right: 0;
-  bottom: 0;
+  grid-area: tabbar;
   height: calc(var(--tabbar-h) + var(--safe-bottom));
   min-height: 56px;
   padding-bottom: var(--safe-bottom);

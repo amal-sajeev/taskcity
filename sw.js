@@ -1,4 +1,4 @@
-const CACHE = 'citylog-v4d';
+const CACHE = 'citylog-v6';
 
 const ASSETS = [
   './',

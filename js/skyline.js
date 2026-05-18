@@ -53,6 +53,19 @@ export function mountSkyline({ canvas }) {
   let cameraInited = false;
   let focusedDistrictId = null;
 
+  // ── User-controlled camera (pan / zoom) ────────────────────────────────
+  // When the user drags or pinches/wheels, we leave auto-fit and hold their
+  // viewpoint until a district chip is selected or reset is invoked.
+  let manualMode = false;
+  const POINTERS = new Map();
+  let lastPanPoint = null;
+  let lastPinchDist = 0;
+  let lastPinchCenter = null;
+  let lastTapTime = 0;
+  let lastTapPoint = null;
+  const TILE_H_MIN = 4;
+  const TILE_H_MAX = 80;
+
   function on(event, fn) {
     if (!listeners.has(event)) listeners.set(event, new Set());
     listeners.get(event).add(fn);
@@ -137,7 +150,10 @@ export function mountSkyline({ canvas }) {
     });
   }
 
-  function applyCameraTargets({ snap = false } = {}) {
+  function applyCameraTargets({ snap = false, force = false } = {}) {
+    // Once the user takes manual control we leave their view alone until
+    // resetCamera() / setFocus() explicitly re-engages auto-fit.
+    if (manualMode && !force) return;
     const t = targetCameraParams();
     if (!t) return;
     const reduceMotion = reduced() || snap || !cameraInited;
@@ -172,8 +188,156 @@ export function mountSkyline({ canvas }) {
 
   function setFocus(districtId) {
     focusedDistrictId = districtId || null;
-    applyCameraTargets();
+    manualMode = false;
+    applyCameraTargets({ force: true });
+    emit('cameramode', { manual: false });
   }
+
+  // ── Pan / zoom helpers ──────────────────────────────────────────────────
+  function canvasPointFromEvent(e) {
+    const rect = canvas.getBoundingClientRect();
+    return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+  }
+
+  // Inverse projection at the ground plane (wz = 0) in CSS px space.
+  function inverseProjectAtGround(px, py) {
+    const tileH = tileHSpring.value;
+    const originX = originXSpring.value;
+    const originY = originYSpring.value;
+    if (tileH <= 0) return null;
+    const a = (px - originX) / tileH;        // wx - wy   (since tileW/2 = tileH)
+    const b = (py - originY) / (tileH / 2);  // wx + wy
+    return { wx: (a + b) / 2, wy: (b - a) / 2 };
+  }
+
+  function setManualCameraInstant({ tileH, originX, originY }) {
+    if (!manualMode) {
+      manualMode = true;
+      emit('cameramode', { manual: true });
+    }
+    tileHSpring.setBoth(tileH);
+    originXSpring.setBoth(originX);
+    originYSpring.setBoth(originY);
+    cameraInited = true;
+    scheduleTick();
+  }
+
+  function panByPx(dx, dy) {
+    setManualCameraInstant({
+      tileH: tileHSpring.value,
+      originX: originXSpring.value + dx,
+      originY: originYSpring.value + dy
+    });
+  }
+
+  function zoomAround(px, py, factor) {
+    const world = inverseProjectAtGround(px, py);
+    if (!world) return;
+    const newTileH = Math.max(TILE_H_MIN, Math.min(TILE_H_MAX, tileHSpring.value * factor));
+    if (newTileH === tileHSpring.value) return;
+    // Solve for origin so (world.wx, world.wy) still projects back to (px, py).
+    const newOriginX = px - (world.wx - world.wy) * newTileH;
+    const newOriginY = py - (world.wx + world.wy) * (newTileH / 2);
+    setManualCameraInstant({ tileH: newTileH, originX: newOriginX, originY: newOriginY });
+  }
+
+  function resetCamera() {
+    manualMode = false;
+    applyCameraTargets({ snap: false, force: true });
+    emit('cameramode', { manual: false });
+  }
+
+  function isManual() {
+    return manualMode;
+  }
+
+  // ── Pointer / wheel input ───────────────────────────────────────────────
+  function onPointerDown(e) {
+    POINTERS.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    try { canvas.setPointerCapture(e.pointerId); } catch (_) {}
+    if (POINTERS.size === 1) {
+      lastPanPoint = { x: e.clientX, y: e.clientY };
+      // Double-tap to reset.
+      const now = performance.now();
+      const dt = now - lastTapTime;
+      const dp = lastTapPoint ? Math.hypot(e.clientX - lastTapPoint.x, e.clientY - lastTapPoint.y) : Infinity;
+      if (dt < 320 && dp < 30) {
+        resetCamera();
+        lastTapTime = 0;
+        lastTapPoint = null;
+      } else {
+        lastTapTime = now;
+        lastTapPoint = { x: e.clientX, y: e.clientY };
+      }
+      canvas.style.cursor = 'grabbing';
+    } else if (POINTERS.size === 2) {
+      const [a, b] = [...POINTERS.values()];
+      lastPinchDist = Math.hypot(a.x - b.x, a.y - b.y);
+      lastPinchCenter = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+      lastPanPoint = null;
+    }
+  }
+
+  function onPointerMove(e) {
+    if (!POINTERS.has(e.pointerId)) return;
+    POINTERS.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (POINTERS.size === 1 && lastPanPoint) {
+      const dx = e.clientX - lastPanPoint.x;
+      const dy = e.clientY - lastPanPoint.y;
+      if (dx || dy) {
+        panByPx(dx, dy);
+        lastPanPoint = { x: e.clientX, y: e.clientY };
+      }
+    } else if (POINTERS.size === 2) {
+      const [a, b] = [...POINTERS.values()];
+      const dist = Math.hypot(a.x - b.x, a.y - b.y);
+      const center = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+      if (lastPinchDist > 0) {
+        const factor = dist / lastPinchDist;
+        const rect = canvas.getBoundingClientRect();
+        zoomAround(center.x - rect.left, center.y - rect.top, factor);
+        if (lastPinchCenter) {
+          const pdx = center.x - lastPinchCenter.x;
+          const pdy = center.y - lastPinchCenter.y;
+          if (pdx || pdy) panByPx(pdx, pdy);
+        }
+      }
+      lastPinchDist = dist;
+      lastPinchCenter = center;
+    }
+  }
+
+  function onPointerUp(e) {
+    POINTERS.delete(e.pointerId);
+    try { canvas.releasePointerCapture(e.pointerId); } catch (_) {}
+    if (POINTERS.size === 1) {
+      const [only] = [...POINTERS.values()];
+      lastPanPoint = { x: only.x, y: only.y };
+      lastPinchDist = 0;
+      lastPinchCenter = null;
+    } else if (POINTERS.size === 0) {
+      lastPanPoint = null;
+      lastPinchDist = 0;
+      lastPinchCenter = null;
+      canvas.style.cursor = 'grab';
+    }
+  }
+
+  function onWheel(e) {
+    e.preventDefault();
+    const pt = canvasPointFromEvent(e);
+    // Exponential mapping keeps the zoom feel symmetric regardless of speed.
+    const factor = Math.exp(-e.deltaY * 0.0015);
+    zoomAround(pt.x, pt.y, factor);
+  }
+
+  canvas.style.cursor = 'grab';
+  canvas.addEventListener('pointerdown', onPointerDown);
+  canvas.addEventListener('pointermove', onPointerMove);
+  canvas.addEventListener('pointerup', onPointerUp);
+  canvas.addEventListener('pointercancel', onPointerUp);
+  canvas.addEventListener('lostpointercapture', onPointerUp);
+  canvas.addEventListener('wheel', onWheel, { passive: false });
 
   function getLayout() {
     return cachedLayout;
@@ -486,8 +650,12 @@ export function mountSkyline({ canvas }) {
     const offsets = getCameraOffsets(time);
 
     if (!cachedLayout) refreshLayout(lastData);
+    // If the spring never received an initial value (e.g. first frame before
+    // applyCameraTargets could measure the canvas), snap it now so we don't
+    // silently skip the very first draw.
+    if (tileHSpring.value === 0 && !cameraInited) applyCameraTargets({ snap: true });
     const camera = getCamera(offsets.offX, offsets.offY);
-    if (!camera || tileHSpring.value === 0) return;
+    if (!camera) return;
 
     ctx.clearRect(0, 0, width, height);
     drawSky(width, height);
@@ -778,6 +946,8 @@ export function mountSkyline({ canvas }) {
     clearHighlight,
     ghostCellForTask,
     setFocus,
+    resetCamera,
+    isManual,
     refreshCamera: () => applyCameraTargets({ snap: false }),
     toast: (msg, opts) => showToast(msg, opts)
   };

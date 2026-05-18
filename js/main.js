@@ -9,19 +9,38 @@ import { mountKeyboard } from './keyboard.js';
 import { mountRouter } from './router.js';
 import { mountStats } from './stats.js';
 
-// window.innerHeight always reflects the real current visible viewport on
-// both iOS Safari and Android Chrome, unlike dvh/svh which can be stale.
-function setViewportHeight() {
-  document.documentElement.style.setProperty('--wih', `${window.innerHeight}px`);
+// ── Single source of truth for sheet height on mobile ─────────────────────
+// The page layout is CSS Grid; the only dynamic input is --mobile-tasks-h.
+// Computing it from window.innerHeight (instead of dvh/svh) makes the split
+// stable across iOS Safari / Android Chrome and any browser-chrome state.
+function syncLayoutVars() {
+  if (window.matchMedia('(min-width: 900px)').matches) return;
+  const vh = window.innerHeight;
+  const topbarH = 56;
+  const tabbarH = 60;
+  const reserve = 160;
+  const sheetH = Math.max(180, Math.min(
+    Math.round(vh * 0.55),
+    vh - topbarH - tabbarH - reserve
+  ));
+  document.documentElement.style.setProperty('--mobile-tasks-h', sheetH + 'px');
 }
-setViewportHeight();
-window.addEventListener('resize', setViewportHeight, { passive: true });
-// orientationchange fires before innerHeight updates; wait one frame.
-window.addEventListener('orientationchange', () => {
-  requestAnimationFrame(setViewportHeight);
-}, { passive: true });
+
+// ── Service-worker auto-recovery ──────────────────────────────────────────
+// When a fresher SW takes over (skipWaiting + clients.claim) the page must
+// reload once so it stops being served by the stale controller.
+if ('serviceWorker' in navigator && location.protocol !== 'file:') {
+  let refreshing = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (refreshing) return;
+    refreshing = true;
+    location.reload();
+  });
+}
 
 function boot() {
+  // Apply before any DOM measurements happen.
+  syncLayoutVars();
   store.load();
   settings.attach(store);
 
@@ -81,6 +100,30 @@ function boot() {
 
   mountKeyboard({ ui: uiApi });
 
+  // Reset-view button: visible only when the user has manually panned/zoomed.
+  const resetBtn = document.getElementById('btn-reset-camera');
+  if (resetBtn) {
+    resetBtn.addEventListener('click', () => {
+      if (skylineApi.resetCamera) skylineApi.resetCamera();
+    });
+    skylineApi.on && skylineApi.on('cameramode', ({ manual }) => {
+      resetBtn.hidden = !manual;
+    });
+  }
+
+  // Recompute the sheet/canvas split whenever the viewport changes (keyboard
+  // appears, orientation flip, browser chrome hide/show) and let the canvas
+  // redraw at its new size.
+  function onViewportChange() {
+    syncLayoutVars();
+    if (skylineApi.refreshCamera) skylineApi.refreshCamera();
+    skylineApi.render(store.raw());
+  }
+  window.addEventListener('resize', onViewportChange, { passive: true });
+  window.addEventListener('orientationchange', () => {
+    requestAnimationFrame(onViewportChange);
+  }, { passive: true });
+
   window.addEventListener('citylog:quota-exceeded', () => {
     showToast('Storage full. Clear completed tasks to continue.', { variant: 'danger', duration: 5000 });
   });
@@ -89,10 +132,8 @@ function boot() {
   });
 
   if ('serviceWorker' in navigator && location.protocol !== 'file:') {
-    window.addEventListener('load', () => {
-      navigator.serviceWorker.register('sw.js').catch(err => {
-        console.warn('SW registration failed', err);
-      });
+    navigator.serviceWorker.register('sw.js').catch(err => {
+      console.warn('SW registration failed', err);
     });
   }
 }

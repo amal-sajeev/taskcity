@@ -33,15 +33,9 @@
 
   --topbar-h: 56px;
   --tabbar-h: 60px;
-  --canvas-reserve: 140px;
-  /* --wih is set by JS (window.innerHeight) for accurate current visible height.
-     Fallback to 100svh (small viewport height = worst-case, all chrome visible). */
-  --mobile-tasks-h: max(180px,
-    min(calc(var(--wih, 100svh) * 0.64),
-      calc(var(--wih, 100svh)
-        - var(--topbar-h) - var(--safe-top)
-        - var(--tabbar-h) - var(--safe-bottom)
-        - var(--canvas-reserve))));
+  /* JS overrides this on load and resize with an exact pixel value based on
+     window.innerHeight. The 55svh fallback covers the moment before JS runs. */
+  --mobile-tasks-h: 55svh;
   --sheet-peek: 92px;
   --sheet-half: 52vh;
   --sheet-full: 88vh;
@@ -63,14 +57,7 @@
 
 @media (orientation: landscape) and (max-height: 480px) {
   :root {
-    --canvas-reserve: 100px;
     --tabbar-h: 52px;
-    --mobile-tasks-h: max(160px,
-      min(calc(var(--wih, 100svh) * 0.60),
-        calc(var(--wih, 100svh)
-          - var(--topbar-h) - var(--safe-top)
-          - var(--tabbar-h) - var(--safe-bottom)
-          - var(--canvas-reserve))));
   }
 }
 

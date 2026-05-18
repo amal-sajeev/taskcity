@@ -1,35 +1,48 @@
+/* Body becomes the page grid. Four rows on mobile, two rows / two cols on desktop. */
+html,
 body {
-  position: fixed;
-  inset: 0;
+  height: 100%;
+}
+
+body {
+  display: grid;
+  grid-template-rows:
+    auto
+    1fr
+    var(--mobile-tasks-h, 55svh)
+    auto;
+  grid-template-columns: 100%;
+  grid-template-areas:
+    "topbar"
+    "city"
+    "sheet"
+    "tabbar";
   background: var(--bg-app);
 }
 
-#skyline {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: calc(var(--mobile-tasks-h) + var(--tabbar-h) + var(--safe-bottom));
-  width: 100%;
-  min-height: 120px;
-  z-index: var(--z-canvas);
-  display: block;
-  background: linear-gradient(180deg, var(--sky-top) 0%, var(--sky-mid) 55%, var(--sky-horizon) 100%);
-  touch-action: none;
-  transition: visibility 0s linear 0s;
+/* On TASKS / STATS the canvas row collapses and the views span its space. */
+body[data-tab="tasks"],
+body[data-tab="stats"] {
+  grid-template-rows: auto 0 1fr auto;
 }
 
 body[data-tab="tasks"] #skyline,
 body[data-tab="stats"] #skyline {
-  visibility: hidden;
-  pointer-events: none;
+  display: none;
+}
+
+#skyline {
+  grid-area: city;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  display: block;
+  background: linear-gradient(180deg, var(--sky-top) 0%, var(--sky-mid) 55%, var(--sky-horizon) 100%);
+  touch-action: none;
 }
 
 .topbar {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
+  grid-area: topbar;
   height: calc(var(--topbar-h) + var(--safe-top));
   padding: var(--safe-top) 14px 0 14px;
   display: flex;
@@ -37,14 +50,9 @@ body[data-tab="stats"] #skyline {
   justify-content: space-between;
   gap: 12px;
   z-index: var(--z-topbar);
-  background: linear-gradient(180deg, rgba(4, 6, 15, 0.78) 0%, rgba(4, 6, 15, 0.35) 70%, rgba(4, 6, 15, 0) 100%);
+  background: linear-gradient(180deg, rgba(4, 6, 15, 0.92) 0%, rgba(4, 6, 15, 0.6) 70%, rgba(4, 6, 15, 0.35) 100%);
   backdrop-filter: blur(10px) saturate(140%);
   -webkit-backdrop-filter: blur(10px) saturate(140%);
-  pointer-events: none;
-}
-
-.topbar > * {
-  pointer-events: auto;
 }
 
 .topbar__brand {
@@ -129,35 +137,32 @@ body[data-tab="stats"] #skyline {
   transform: scale(0.96);
 }
 
+.icon-btn--accent {
+  color: var(--district-color, #00f5ff);
+  box-shadow: 0 0 12px rgba(0, 245, 255, 0.25);
+}
+
+.icon-btn--accent::before {
+  opacity: 0.7;
+}
+
 @media (min-width: 900px) {
-  .topbar {
-    /* Switch to grid so the brand can be truly centered in the canvas column */
-    display: grid;
-    grid-template-columns: var(--sheet-rail-w) 1fr auto;
-    align-items: center;
-    padding-left: 0;
-    padding-right: 14px;
+  body {
+    grid-template-columns: var(--sheet-rail-w) 1fr;
+    grid-template-rows: auto 1fr;
+    grid-template-areas:
+      "topbar topbar"
+      "sheet  city";
   }
 
-  .topbar__brand {
-    grid-column: 2;
-    justify-self: center;
-    padding-left: 0;
+  /* On desktop the CITY canvas is always visible regardless of tab. */
+  body[data-tab="tasks"],
+  body[data-tab="stats"] {
+    grid-template-rows: auto 1fr;
   }
 
-  .topbar__actions {
-    grid-column: 3;
-  }
-
-  #skyline {
-    left: var(--sheet-rail-w);
-    right: 0;
-    /* Explicit width overrides the base width:100% and prevents the canvas
-       from measuring as the full viewport width during resize(). */
-    width: calc(100% - var(--sheet-rail-w));
-    top: 0;
-    bottom: 0;
-    height: 100dvh;
-    min-height: 0;
+  body[data-tab="tasks"] #skyline,
+  body[data-tab="stats"] #skyline {
+    display: block;
   }
 }

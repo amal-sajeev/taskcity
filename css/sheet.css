@@ -1,18 +1,13 @@
 .sheet {
-  position: fixed;
-  left: 0;
-  right: 0;
-  bottom: calc(var(--tabbar-h) + var(--safe-bottom));
-  height: var(--mobile-tasks-h);
-  max-height: calc(var(--wih, 100svh)
-    - var(--topbar-h) - var(--safe-top)
-    - var(--tabbar-h) - var(--safe-bottom));
+  /* Lives inside #view-city > .views (grid-area: sheet). Just fill the cell. */
+  width: 100%;
+  height: 100%;
+  min-height: 0;
   background: linear-gradient(180deg, var(--bg-panel) 0%, var(--bg-panel-strong) 100%);
   border-top: 1px solid var(--bg-panel-border);
   box-shadow: 0 -12px 40px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(0, 245, 255, 0.04);
   display: flex;
   flex-direction: column;
-  z-index: var(--z-sheet);
   touch-action: auto;
 }
 
@@ -139,17 +134,10 @@
 
 @media (min-width: 900px) {
   .sheet {
-    left: 0;
-    right: auto;
-    top: 0;
-    bottom: 0;
-    width: var(--sheet-rail-w);
-    height: 100vh;
-    max-height: 100vh;
     border-top: 0;
     border-right: 1px solid var(--bg-panel-border);
     box-shadow: 6px 0 30px rgba(0, 0, 0, 0.5);
-    padding-top: calc(var(--topbar-h) + var(--safe-top) + 44px);
+    padding-top: 44px; /* room for the rail-toggle row */
     touch-action: auto;
   }
 }
