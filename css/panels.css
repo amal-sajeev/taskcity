@@ -363,6 +363,39 @@ body[data-active-district]:not([data-active-district="all"]) .task__subtitle {
   }
 }
 
+/* ── In-progress (under construction) ─────────────────────────────────── */
+
+.task--in-progress .task__surface {
+  background-image: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--row-color) 9%, transparent),
+    color-mix(in srgb, var(--row-color) 2%, transparent) 55%,
+    transparent 90%
+  );
+}
+
+.task--in-progress .task__complete {
+  background: color-mix(in srgb, var(--row-color) 18%, transparent);
+  border-color: var(--row-color);
+  box-shadow:
+    0 0 8px color-mix(in srgb, var(--row-color) 40%, transparent),
+    inset 0 0 6px color-mix(in srgb, var(--row-color) 28%, transparent);
+}
+
+.task--in-progress .task__complete svg {
+  filter: drop-shadow(0 0 3px color-mix(in srgb, var(--row-color) 60%, transparent));
+}
+
+.task.task--in-progress .task__icon {
+  animation: pendingPulse 1.4s ease-in-out infinite;
+  color: var(--row-color);
+  opacity: 0.85;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .task.task--in-progress .task__icon { animation: none; }
+}
+
 .task--completed {
   opacity: 0.5;
 }

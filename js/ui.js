@@ -1,4 +1,4 @@
-import { createTask, completeTask, deleteTask } from './tasks.js';
+import { createTask, completeTask, cycleTask, deleteTask } from './tasks.js';
 import { showToast } from './toast.js';
 import { attachSwipe } from './swipe.js';
 import { settings } from './settings.js';
@@ -36,6 +36,8 @@ const completedIconSvg = `
 
 const checkSvg = '<svg viewBox="0 0 24 24" width="18" height="18"><path fill="none" stroke="currentColor" stroke-width="2.5" d="M5 12l4 4L19 7"/></svg>';
 const trashSvg = '<svg viewBox="0 0 24 24" width="18" height="18"><path fill="none" stroke="currentColor" stroke-width="2" d="M5 7h14M9 7V5h6v2M7 7l1 13h8l1-13"/></svg>';
+// Half-filled circle (right hemisphere) with a small play triangle inside.
+const inProgressSvg = '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" opacity="0.55" d="M12 4a8 8 0 0 1 0 16Z"/><polygon fill="currentColor" points="10,9 16,12 10,15"/></svg>';
 
 export function mountUi({ store, skyline, modals }) {
   const tabsEl = document.getElementById('district-tabs');
@@ -109,10 +111,10 @@ export function mountUi({ store, skyline, modals }) {
     const tasks = store.getTasks();
     const pendingByDistrict = new Map();
     for (const t of tasks) {
-      if (t.status !== 'pending') continue;
+      if (t.status === 'complete') continue;
       pendingByDistrict.set(t.districtId, (pendingByDistrict.get(t.districtId) || 0) + 1);
     }
-    const pendingAll = tasks.filter(t => t.status === 'pending').length;
+    const pendingAll = tasks.filter(t => t.status !== 'complete').length;
 
     if (activeDistrictId !== ALL && !districts.find(d => d.id === activeDistrictId)) {
       activeDistrictId = ALL;
@@ -167,13 +169,16 @@ export function mountUi({ store, skyline, modals }) {
       ? allTasks
       : allTasks.filter(t => t.districtId === activeDistrictId);
 
-    const pending = filtered
-      .filter(t => t.status === 'pending')
+    // Active list: in-progress first (most relevant), then pending by priority.
+    const active = filtered
+      .filter(t => t.status === 'pending' || t.status === 'in_progress')
       .sort((a, b) => {
+        if (a.status !== b.status) return a.status === 'in_progress' ? -1 : 1;
         const pa = a.priority || a.createdAt || '';
         const pb = b.priority || b.createdAt || '';
         return pa.localeCompare(pb);
       });
+    const pending = active; // kept as the variable name used below for staggering
     const completed = filtered
       .filter(t => t.status === 'complete')
       .sort((a, b) => (b.completedAt || '').localeCompare(a.completedAt || ''));
@@ -222,13 +227,14 @@ export function mountUi({ store, skyline, modals }) {
       : allTasks.filter(t => t.districtId === activeDistrictId);
 
     const showCompleted = !!(tasksShowCompletedEl && tasksShowCompletedEl.checked);
-    let rows = filtered.filter(t => showCompleted || t.status === 'pending');
+    let rows = filtered.filter(t => showCompleted || t.status !== 'complete');
 
     const sortBy = tasksSort;
     rows.sort((a, b) => {
-      // pending first when showing both
-      if (showCompleted && a.status !== b.status) {
-        return a.status === 'pending' ? -1 : 1;
+      // in-progress, then pending, then completed
+      if (a.status !== b.status) {
+        const rank = s => (s === 'in_progress' ? 0 : s === 'pending' ? 1 : 2);
+        return rank(a.status) - rank(b.status);
       }
       switch (sortBy) {
         case 'newest':
@@ -245,7 +251,7 @@ export function mountUi({ store, skyline, modals }) {
         }
         case 'priority':
         default: {
-          if (a.status === 'pending' && b.status === 'pending') {
+          if (a.status !== 'complete' && b.status !== 'complete') {
             const pa = a.priority || a.createdAt || '';
             const pb = b.priority || b.createdAt || '';
             return pa.localeCompare(pb);
@@ -266,11 +272,24 @@ export function mountUi({ store, skyline, modals }) {
 
   function renderTaskRow(task, district, isCompleted) {
     const li = document.createElement('li');
-    li.className = isCompleted ? 'task task--completed' : 'task';
+    const inProgress = task.status === 'in_progress';
+    const classes = ['task'];
+    if (isCompleted) classes.push('task--completed');
+    if (inProgress) classes.push('task--in-progress');
+    li.className = classes.join(' ');
     li.dataset.id = task.id;
+    li.dataset.status = task.status;
     const color = district ? district.color : '#5a6a90';
     const districtName = district ? district.name : '';
     li.style.setProperty('--district-color', color);
+    li.style.setProperty('--row-color', color);
+
+    const circleAria = isCompleted
+      ? 'Completed'
+      : (inProgress ? 'Complete task' : 'Start task');
+    const circleContent = isCompleted
+      ? checkSvg
+      : (inProgress ? inProgressSvg : '');
 
     li.innerHTML = `
       <span class="task__trail task__trail--right" aria-hidden="true">
@@ -286,8 +305,8 @@ export function mountUi({ store, skyline, modals }) {
           <span class="task__title">${escapeHtml(task.title)}</span>
           <span class="task__subtitle" style="color:${color};">${escapeHtml(districtName)}</span>
         </span>
-        <button type="button" class="task__complete" aria-label="${isCompleted ? 'Completed' : 'Complete task'}">
-          ${isCompleted ? checkSvg : ''}
+        <button type="button" class="task__complete" aria-label="${circleAria}">
+          ${circleContent}
         </button>
       </div>
     `;
@@ -296,7 +315,7 @@ export function mountUi({ store, skyline, modals }) {
     if (!isCompleted) {
       completeBtn.addEventListener('click', (e) => {
         e.stopPropagation();
-        onComplete(task.id, li);
+        onCycle(task.id, li);
       });
 
       const handle = swipeHandles.get(li);
@@ -500,6 +519,18 @@ export function mountUi({ store, skyline, modals }) {
     }, 180);
   }
 
+  function onCycle(taskId, rowEl) {
+    const task = store.getTask(taskId);
+    if (!task || task.status === 'complete') return;
+    if (task.status === 'in_progress') {
+      onComplete(taskId, rowEl);
+      return;
+    }
+    // pending -> in_progress: no exit-row animation, just transition in place
+    // so the user sees the row state change and the city update together.
+    cycleTask(store, skyline, taskId);
+  }
+
   function onDelete(taskId) {
     const task = store.getTask(taskId);
     if (!task) return;
@@ -535,7 +566,7 @@ export function mountUi({ store, skyline, modals }) {
   function renderStats() {
     const tasks = store.getTasks();
     const built = tasks.filter(t => t.status === 'complete').length;
-    const pending = tasks.filter(t => t.status === 'pending').length;
+    const pending = tasks.filter(t => t.status !== 'complete').length;
     const text = `${built} building${built === 1 ? '' : 's'} \u00B7 ${pending} pending`;
     statsChip.textContent = text;
     sheetStats.textContent = text;

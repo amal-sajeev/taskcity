@@ -2,7 +2,7 @@
 // is self-contained against future layout changes.
 
 const KEY = 'citylog_data';
-const VERSION = 4;
+const VERSION = 5;
 const DEFAULT_SETTINGS = { sound: false, haptics: true, motion: 'auto', showCompletedInTasks: false };
 export const INITIAL_DISTRICT_SIZE = 3;
 
@@ -126,6 +126,16 @@ function migrate(data) {
         const fromCount = Math.ceil(Math.sqrt(Math.max(1, n)));
         const fromCells = maxCells.get(d.id) || 0;
         d.size = Math.max(INITIAL_DISTRICT_SIZE, fromCount, fromCells);
+      }
+    }
+  }
+
+  if (fromVersion < 5) {
+    // v5 introduces the 'in_progress' task status with a locked cell+building.
+    // No existing rows match that state, so this is just a version bump.
+    for (const t of data.tasks) {
+      if (t.status !== 'pending' && t.status !== 'complete') {
+        t.status = 'pending';
       }
     }
   }
@@ -321,6 +331,7 @@ export const store = {
       districtId,
       status: 'pending',
       createdAt: now,
+      startedAt: null,
       completedAt: null,
       building: null,
       priority: now
@@ -332,12 +343,25 @@ export const store = {
     return task;
   },
 
+  startTask(id, buildingData) {
+    const task = _state.tasks.find(t => t.id === id);
+    if (!task || task.status !== 'pending') return null;
+    task.status = 'in_progress';
+    task.startedAt = nowIso();
+    task.building = buildingData;
+    persist();
+    notify();
+    return task;
+  },
+
   completeTask(id, buildingData) {
     const task = _state.tasks.find(t => t.id === id);
     if (!task || task.status === 'complete') return null;
+    // If a building was already locked (in_progress -> complete), keep the
+    // exact same cell and seed so the wireframe matches the rising building.
+    if (!task.building) task.building = buildingData;
     task.status = 'complete';
     task.completedAt = nowIso();
-    task.building = buildingData;
     persist();
     notify();
     return task;

@@ -313,6 +313,164 @@ function lerpPoint(a, b, t) {
   return { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t };
 }
 
+// ── Under-construction primitives ──────────────────────────────────────────
+
+export const FOUNDATION_WZ = 0.08;
+
+function strokeSegment(ctx, a, b) {
+  ctx.beginPath();
+  ctx.moveTo(a.x, a.y);
+  ctx.lineTo(b.x, b.y);
+  ctx.stroke();
+}
+
+export function drawIsoFoundation(ctx, project, world, color, dpr) {
+  const { wx, wy } = world;
+  const inset = 0.06;
+  const x0 = wx + inset;
+  const x1 = wx + 1 - inset;
+  const y0 = wy + inset;
+  const y1 = wy + 1 - inset;
+  const wz = FOUNDATION_WZ;
+
+  const baseNE = project(x1, y0, 0);
+  const baseSE = project(x1, y1, 0);
+  const baseSW = project(x0, y1, 0);
+  const topNW = project(x0, y0, wz);
+  const topNE = project(x1, y0, wz);
+  const topSE = project(x1, y1, wz);
+  const topSW = project(x0, y1, wz);
+
+  // Concrete-look fills with the district color as a faint edge accent.
+  const concreteEast  = 'rgba(50,55,68,0.65)';
+  const concreteSouth = 'rgba(40,45,58,0.78)';
+  const concreteTop   = 'rgba(70,78,92,0.85)';
+  const edge = hexToRgba(color, 0.5);
+
+  fillQuad(ctx, baseNE, topNE, topSE, baseSE, concreteEast,  edge, 0.6 * dpr);
+  fillQuad(ctx, baseSW, topSW, topSE, baseSE, concreteSouth, edge, 0.6 * dpr);
+  fillQuad(ctx, topNW,  topNE, topSE, topSW, concreteTop,   edge, 0.6 * dpr);
+}
+
+export function drawIsoWireframe(ctx, b, color, project, elevScale, dpr, time) {
+  if (!b.cell) return;
+  const { wx, wy } = b.cell;
+  const inset = 0.1;
+  const x0 = wx + inset;
+  const x1 = wx + 1 - inset;
+  const y0 = wy + inset;
+  const y1 = wy + 1 - inset;
+  const heightUnits = buildingHeightUnits(b, elevScale);
+  const wzTop = heightUnits / elevScale;
+  const wzBase = FOUNDATION_WZ;
+
+  const baseNW = project(x0, y0, wzBase);
+  const baseNE = project(x1, y0, wzBase);
+  const baseSE = project(x1, y1, wzBase);
+  const baseSW = project(x0, y1, wzBase);
+  const topNW = project(x0, y0, wzTop);
+  const topNE = project(x1, y0, wzTop);
+  const topSE = project(x1, y1, wzTop);
+  const topSW = project(x0, y1, wzTop);
+
+  // Slow breathing pulse so the silhouette feels alive even when static.
+  const pulse = 0.55 + 0.30 * (0.5 + 0.5 * Math.sin(time * 0.002 + b.seed * 0.0001));
+
+  ctx.save();
+  ctx.strokeStyle = hexToRgba(color, pulse);
+  ctx.lineWidth = 1 * dpr;
+  ctx.setLineDash([4 * dpr, 3 * dpr]);
+  ctx.shadowColor = color;
+  ctx.shadowBlur = 4 * dpr;
+
+  // 4 verticals
+  strokeSegment(ctx, baseNW, topNW);
+  strokeSegment(ctx, baseNE, topNE);
+  strokeSegment(ctx, baseSE, topSE);
+  strokeSegment(ctx, baseSW, topSW);
+  // 4 top edges
+  strokeSegment(ctx, topNW, topNE);
+  strokeSegment(ctx, topNE, topSE);
+  strokeSegment(ctx, topSE, topSW);
+  strokeSegment(ctx, topSW, topNW);
+  // 4 base edges (faded so they don't fight the foundation top)
+  ctx.globalAlpha = 0.55;
+  strokeSegment(ctx, baseNW, baseNE);
+  strokeSegment(ctx, baseNE, baseSE);
+  strokeSegment(ctx, baseSE, baseSW);
+  strokeSegment(ctx, baseSW, baseNW);
+  ctx.restore();
+}
+
+export function drawIsoCrane(ctx, b, color, project, elevScale, dpr, time) {
+  if (!b.cell) return;
+  const { wx, wy } = b.cell;
+  const cx = wx + 0.5;
+  const cy = wy + 0.5;
+  const wzBase = FOUNDATION_WZ;
+  const heightUnits = buildingHeightUnits(b, elevScale);
+  const buildingWz = heightUnits / elevScale;
+  const mastTopWz = Math.max(1.2, buildingWz * 1.15);
+
+  const mastBase = project(cx, cy, wzBase);
+  const mastTop  = project(cx, cy, mastTopWz);
+
+  // Deterministic starting angle from the seed, plus slow rotation around the
+  // vertical axis (the jib stays horizontal so the isometric perspective is
+  // preserved -- we only spin it within the XY ground plane in world space).
+  const seedAng = ((b.seed >>> 0) % 360) * Math.PI / 180;
+  const angVel = 0.62; // rad / sec  (~ 36 deg / sec)
+  const ang = seedAng + (time * 0.001) * angVel;
+
+  const jibLen = 0.42; // forward arm (cells)
+  const cwLen  = 0.18; // counter-weight arm (cells)
+  const dx = Math.cos(ang);
+  const dy = Math.sin(ang);
+  const jibTipWx = cx + dx * jibLen;
+  const jibTipWy = cy + dy * jibLen;
+  const cwWx = cx - dx * cwLen;
+  const cwWy = cy - dy * cwLen;
+
+  const jibTip = project(jibTipWx, jibTipWy, mastTopWz);
+  const cwBack = project(cwWx, cwWy, mastTopWz);
+
+  // Hook hangs halfway down the mast height.
+  const hookWz = Math.max(wzBase + 0.05, mastTopWz * 0.55);
+  const hookTop = project(jibTipWx, jibTipWy, mastTopWz);
+  const hookBot = project(jibTipWx, jibTipWy, hookWz);
+
+  ctx.save();
+  ctx.strokeStyle = hexToRgba(color, 0.88);
+  ctx.shadowColor = color;
+  ctx.shadowBlur = 4 * dpr;
+
+  // Mast (thick)
+  ctx.lineWidth = 1.6 * dpr;
+  strokeSegment(ctx, mastBase, mastTop);
+
+  // Jib (forward + counter-weight arm in one stroke)
+  ctx.lineWidth = 1.2 * dpr;
+  strokeSegment(ctx, cwBack, jibTip);
+
+  // Counter-weight block
+  const cwSize = 2.5 * dpr;
+  ctx.shadowBlur = 0;
+  ctx.fillStyle = hexToRgba(color, 0.85);
+  ctx.fillRect(cwBack.x - cwSize, cwBack.y - cwSize, cwSize * 2, cwSize * 2);
+
+  // Cable + hook
+  ctx.lineWidth = 0.8 * dpr;
+  ctx.shadowBlur = 2 * dpr;
+  strokeSegment(ctx, hookTop, hookBot);
+  const hookSize = 2 * dpr;
+  ctx.fillStyle = hexToRgba(color, 0.95);
+  ctx.fillRect(hookBot.x - hookSize, hookBot.y - hookSize / 2, hookSize * 2, hookSize);
+
+  ctx.restore();
+}
+
+// ───────────────────────────────────────────────────────────────────────────
+
 function drawIsoRoof(ctx, b, color, project, x0, y0, x1, y1, wz, elevScale, dpr) {
   if (b.roofStyle === 'flat') return;
 

@@ -4,6 +4,9 @@ import {
   drawIsoFloorLabel,
   drawIsoGhost,
   drawIsoBaseGlow,
+  drawIsoFoundation,
+  drawIsoWireframe,
+  drawIsoCrane,
   hexToRgba,
   mulberry32,
   generateBuilding
@@ -432,15 +435,17 @@ export function mountSkyline({ canvas }) {
     const districts = layout.districts;
     if (districts.length === 0) return [];
 
-    const completed = data.tasks.filter(t => t.status === 'complete');
-    // Per-district set of occupied cells (col,row), starting from completed buildings.
+    // Both completed buildings and in-progress placements reserve a cell.
+    const reserved = data.tasks.filter(t =>
+      (t.status === 'complete' || t.status === 'in_progress') && t.building && t.building.cell
+    );
     const occupiedByDistrict = new Map();
     for (const ld of districts) {
       const set = new Set();
-      for (const t of completed) {
+      for (const t of reserved) {
         if (t.districtId !== ld.id) continue;
-        const c = t.building && t.building.cell;
-        if (c && typeof c.col === 'number' && typeof c.row === 'number') {
+        const c = t.building.cell;
+        if (typeof c.col === 'number' && typeof c.row === 'number') {
           set.add(c.col + ',' + c.row);
         }
       }
@@ -514,6 +519,44 @@ export function mountSkyline({ canvas }) {
         color
       });
       celebrate(buildingData.cell, color);
+    }
+
+    scheduleTick();
+  }
+
+  function animateConstructionStart(buildingData, color) {
+    if (!buildingData || !buildingData.cell) return;
+    const camera = getCamera(0, 0);
+    if (!camera) { scheduleTick(); return; }
+
+    const cell = buildingData.cell;
+    const center = camera.project(cell.wx + 0.5, cell.wy + 0.5, 0);
+
+    if (!reduced()) {
+      // A short, low-key flare under the cell so the user can see exactly
+      // where the new construction landed without the full completion show.
+      beams.push({
+        x: center.x,
+        y: center.y,
+        startTime: performance.now(),
+        life: 380,
+        color
+      });
+
+      const sparkCount = 4;
+      for (let i = 0; i < sparkCount; i++) {
+        const ang = -Math.PI / 2 + (i - sparkCount / 2) * 0.7 + (Math.random() - 0.5) * 0.4;
+        const speed = (2 + Math.random() * 1.5) * dpr;
+        sparks.push({
+          x: center.x,
+          y: center.y - 6 * dpr,
+          vx: Math.cos(ang) * speed,
+          vy: Math.sin(ang) * speed - 1.2 * dpr,
+          startTime: performance.now(),
+          life: 480,
+          color
+        });
+      }
     }
 
     scheduleTick();
@@ -690,15 +733,26 @@ export function mountSkyline({ canvas }) {
 
     const drawables = [];
     for (const t of lastData.tasks) {
-      if (t.status === 'complete' && t.building && t.building.cell) {
-        const ld = districtMap.get(t.districtId);
-        if (!ld) continue;
+      if (!t.building || !t.building.cell) continue;
+      const ld = districtMap.get(t.districtId);
+      if (!ld) continue;
+      const cell = t.building.cell;
+      if (t.status === 'complete') {
         if (animatingSeeds.has(t.building.seed)) continue;
-        const cell = t.building.cell;
         drawables.push({
+          kind: 'building',
           building: t.building,
           color: ld.color,
           sortKey: cell.wx + cell.wy + (t.building.height / 1000)
+        });
+      } else if (t.status === 'in_progress') {
+        drawables.push({
+          kind: 'construction',
+          building: t.building,
+          color: ld.color,
+          // Sort against neighbour cells but slightly behind a finished
+          // building in the same cell (impossible in practice, but safe).
+          sortKey: cell.wx + cell.wy + 0.0005
         });
       }
     }
@@ -706,14 +760,21 @@ export function mountSkyline({ canvas }) {
     drawables.sort((a, b) => a.sortKey - b.sortKey);
 
     for (const d of drawables) {
-      drawIsoBaseGlow(ctx, camera.project, d.building.cell, d.color, 0.05, dpr);
-      drawIsoBuilding(ctx, d.building, d.color, {
-        project: camera.project,
-        elevScale: camera.elevScale,
-        dpr,
-        riseProgress: 1,
-        time
-      });
+      if (d.kind === 'construction') {
+        drawIsoBaseGlow(ctx, camera.project, d.building.cell, d.color, 0.08, dpr);
+        drawIsoFoundation(ctx, camera.project, d.building.cell, d.color, dpr);
+        drawIsoWireframe(ctx, d.building, d.color, camera.project, camera.elevScale, dpr, time);
+        drawIsoCrane(ctx, d.building, d.color, camera.project, camera.elevScale, dpr, time);
+      } else {
+        drawIsoBaseGlow(ctx, camera.project, d.building.cell, d.color, 0.05, dpr);
+        drawIsoBuilding(ctx, d.building, d.color, {
+          project: camera.project,
+          elevScale: camera.elevScale,
+          dpr,
+          riseProgress: 1,
+          time
+        });
+      }
     }
 
     const animList = [...animations.values()].sort((a, b) => {
@@ -906,8 +967,11 @@ export function mountSkyline({ canvas }) {
     if (!lastData || !cachedLayout) return null;
     const ld = cachedLayout.districts.find(d => d.id === districtId);
     if (!ld) return null;
-    const completed = lastData.tasks.filter(t => t.status === 'complete');
-    const cell = nextCellForDistrict(ld, completed);
+    // Both completed and in-progress tasks hold a cell.
+    const reserved = lastData.tasks.filter(t =>
+      (t.status === 'complete' || t.status === 'in_progress') && t.building && t.building.cell
+    );
+    const cell = nextCellForDistrict(ld, reserved);
     if (!cell) {
       // Overflow: place at (size-1, size-1) so the building still appears.
       const col = ld.size - 1;
@@ -937,6 +1001,7 @@ export function mountSkyline({ canvas }) {
   return {
     render,
     animateRise,
+    animateConstructionStart,
     getDimensions,
     on,
     nextCell,
