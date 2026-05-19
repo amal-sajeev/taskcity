@@ -363,6 +363,16 @@ body[data-active-district]:not([data-active-district="all"]) .task__subtitle {
   }
 }
 
+/* ── Search match highlight ───────────────────────────────────────────── */
+
+.task__match {
+  background: color-mix(in srgb, var(--row-color, #00f5ff) 32%, transparent);
+  color: var(--text-accent);
+  border-radius: 2px;
+  padding: 0 2px;
+  box-shadow: 0 0 6px color-mix(in srgb, var(--row-color, #00f5ff) 45%, transparent);
+}
+
 /* ── In-progress (under construction) ─────────────────────────────────── */
 
 .task--in-progress .task__surface {

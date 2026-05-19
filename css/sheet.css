@@ -51,13 +51,21 @@
 }
 
 .quick-add__prefix {
-  font-family: 'JetBrains Mono', monospace;
-  font-weight: 700;
-  font-size: 14px;
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
   color: var(--district-color, #00f5ff);
-  text-shadow: 0 0 8px var(--district-color, #00f5ff);
-  width: 14px;
-  text-align: center;
+  filter: drop-shadow(0 0 4px var(--district-color, #00f5ff));
+  opacity: 0.85;
+  transition: opacity var(--transition), filter var(--transition);
+}
+
+.quick-add.is-focused .quick-add__prefix,
+.quick-add.is-searching .quick-add__prefix {
+  opacity: 1;
 }
 
 .quick-add input {
@@ -83,9 +91,50 @@
   outline: none;
 }
 
+/* Hide the native search-input clear control; we render our own button. */
+.quick-add input::-webkit-search-cancel-button,
+.quick-add input::-webkit-search-decoration {
+  -webkit-appearance: none;
+  appearance: none;
+}
+
 .quick-add.is-focused::before {
   width: 3px;
   opacity: 1;
+}
+
+.quick-add.is-searching::before {
+  width: 3px;
+  opacity: 1;
+  animation: quickAddSearchGlow 1.6s ease-in-out infinite;
+}
+
+@keyframes quickAddSearchGlow {
+  0%, 100% { box-shadow: 0 0 6px var(--district-color, #00f5ff); }
+  50%      { box-shadow: 0 0 14px var(--district-color, #00f5ff); }
+}
+
+.quick-add__clear {
+  flex: 0 0 auto;
+  width: 24px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 50%;
+  cursor: pointer;
+  transition: color var(--transition), background var(--transition), border-color var(--transition);
+}
+
+.quick-add__clear:hover,
+.quick-add__clear:focus-visible {
+  color: var(--text-accent);
+  background: rgba(255, 255, 255, 0.04);
+  border-color: var(--bg-panel-border);
+  outline: none;
 }
 
 .quick-add__more {

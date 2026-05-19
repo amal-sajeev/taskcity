@@ -75,10 +75,20 @@
           <div class="tabs" id="district-tabs" role="tablist" aria-label="Districts"></div>
         </div>
 
-        <form class="quick-add" id="quick-add" autocomplete="off">
-          <span class="quick-add__prefix" aria-hidden="true">&gt;</span>
-          <input type="text" id="quick-add-input" placeholder="Log new directive..." maxlength="200" aria-label="New task" />
-          <button type="button" class="quick-add__more" id="btn-add-task-chip" aria-label="More options" title="More options">
+        <form class="quick-add" id="quick-add" autocomplete="off" role="search">
+          <span class="quick-add__prefix" aria-hidden="true">
+            <svg class="quick-add__prefix-search" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
+              <circle cx="10" cy="10" r="6" fill="none" stroke="currentColor" stroke-width="2"/>
+              <path d="M15 15l5 5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square"/>
+            </svg>
+          </span>
+          <input type="search" id="quick-add-input" placeholder="Search or add directive..." maxlength="200" aria-label="Search tasks, or press Enter to add a new directive" />
+          <button type="button" class="quick-add__clear" id="quick-add-clear" aria-label="Clear search" title="Clear (Esc)" hidden>
+            <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
+              <path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" d="M6 6l12 12M18 6L6 18"/>
+            </svg>
+          </button>
+          <button type="button" class="quick-add__more" id="btn-add-task-chip" aria-label="Add task" title="Add task">
             <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
               <path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" d="M12 5v14M5 12h14"/>
             </svg>

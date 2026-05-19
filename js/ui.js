@@ -53,6 +53,7 @@ export function mountUi({ store, skyline, modals }) {
   const districtsBtn = document.getElementById('btn-districts');
   const quickAddForm = document.getElementById('quick-add');
   const quickAddInput = document.getElementById('quick-add-input');
+  const quickAddClear = document.getElementById('quick-add-clear');
 
   // TASKS view elements
   const tasksChipsEl = document.getElementById('tasks-chips');
@@ -67,6 +68,33 @@ export function mountUi({ store, skyline, modals }) {
   let undoTimer = null;
   let lastUndoSnapshot = null;
   let tasksSort = 'priority';
+  let searchQuery = '';
+
+  function matchesSearch(task, district) {
+    if (!searchQuery) return true;
+    const title = (task.title || '').toLowerCase();
+    const dname = district ? (district.name || '').toLowerCase() : '';
+    return title.includes(searchQuery) || dname.includes(searchQuery);
+  }
+
+  function highlightHtml(text, q) {
+    if (!q) return escapeHtml(text);
+    const src = String(text);
+    const lower = src.toLowerCase();
+    const parts = [];
+    let i = 0;
+    while (i < src.length) {
+      const idx = lower.indexOf(q, i);
+      if (idx === -1) {
+        parts.push(escapeHtml(src.slice(i)));
+        break;
+      }
+      if (idx > i) parts.push(escapeHtml(src.slice(i, idx)));
+      parts.push(`<mark class="task__match">${escapeHtml(src.slice(idx, idx + q.length))}</mark>`);
+      i = idx + q.length;
+    }
+    return parts.join('');
+  }
 
   if (tasksShowCompletedEl) {
     const s = store.raw().meta && store.raw().meta.settings;
@@ -165,9 +193,11 @@ export function mountUi({ store, skyline, modals }) {
     const districtMap = new Map(districts.map(d => [d.id, d]));
     const allTasks = store.getTasks();
 
-    const filtered = activeDistrictId === ALL
+    let filtered = activeDistrictId === ALL
       ? allTasks
       : allTasks.filter(t => t.districtId === activeDistrictId);
+
+    filtered = filtered.filter(t => matchesSearch(t, districtMap.get(t.districtId)));
 
     // Active list: in-progress first (most relevant), then pending by priority.
     const active = filtered
@@ -191,15 +221,17 @@ export function mountUi({ store, skyline, modals }) {
     for (const task of pending) {
       const d = districtMap.get(task.districtId);
       const row = renderTaskRow(task, d, false);
+      // Skip the stagger animation while searching -- the list rebuilds
+      // on every keystroke and the cascade would feel noisy.
       const isNew = !oldPendingIds.includes(task.id);
-      if (isNew) {
+      if (isNew && !searchQuery) {
         row.classList.add('is-stagger');
         row.style.setProperty('--i', String(idx));
       }
       pendingListEl.appendChild(row);
       idx++;
     }
-    emptyEl.hidden = pending.length !== 0;
+    updateEmptyState(pending.length);
 
     if (selectedTaskId && !pending.find(t => t.id === selectedTaskId)) {
       selectedTaskId = null;
@@ -213,6 +245,24 @@ export function mountUi({ store, skyline, modals }) {
     }
     completedCountEl.textContent = completed.length;
     completedSection.hidden = completed.length === 0;
+    // Auto-expand completed when a search matches in there, so the user
+    // doesn't have to dig for results behind a collapsed details element.
+    if (searchQuery && completed.length > 0) {
+      completedSection.open = true;
+    }
+  }
+
+  function updateEmptyState(activeCount) {
+    if (activeCount > 0) {
+      emptyEl.hidden = true;
+      return;
+    }
+    if (searchQuery) {
+      emptyEl.innerHTML = `<span class="empty-state__icon" aria-hidden="true">\u25A1</span> No active matches for "${escapeHtml(searchQuery)}".`;
+    } else {
+      emptyEl.innerHTML = `<span class="empty-state__icon" aria-hidden="true">\u25A1</span> No pending directives. The city rests.`;
+    }
+    emptyEl.hidden = false;
   }
 
   function renderTasksView() {
@@ -302,8 +352,8 @@ export function mountUi({ store, skyline, modals }) {
         <span class="task__handle" aria-hidden="true"></span>
         <span class="task__icon" style="color:${color};">${isCompleted ? completedIconSvg : buildingIconSvg}</span>
         <span class="task__text">
-          <span class="task__title">${escapeHtml(task.title)}</span>
-          <span class="task__subtitle" style="color:${color};">${escapeHtml(districtName)}</span>
+          <span class="task__title">${highlightHtml(task.title, searchQuery)}</span>
+          <span class="task__subtitle" style="color:${color};">${highlightHtml(districtName, searchQuery)}</span>
         </span>
         <button type="button" class="task__complete" aria-label="${circleAria}">
           ${circleContent}
@@ -583,12 +633,39 @@ export function mountUi({ store, skyline, modals }) {
     });
     quickAddInput.addEventListener('focus', () => quickAddForm.classList.add('is-focused'));
     quickAddInput.addEventListener('blur', () => quickAddForm.classList.remove('is-focused'));
+    quickAddInput.addEventListener('input', () => {
+      applySearchFromInput();
+    });
+    // type="search" fires a non-bubbling "search" event when the native clear
+    // (Webkit X / Esc) is used -- handle it the same way as typing.
+    quickAddInput.addEventListener('search', () => applySearchFromInput());
     quickAddInput.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') {
-        quickAddInput.value = '';
-        quickAddInput.blur();
+        if (quickAddInput.value === '') {
+          quickAddInput.blur();
+        } else {
+          quickAddInput.value = '';
+          applySearchFromInput();
+        }
       }
     });
+    if (quickAddClear) {
+      quickAddClear.addEventListener('click', () => {
+        quickAddInput.value = '';
+        applySearchFromInput();
+        quickAddInput.focus();
+      });
+    }
+  }
+
+  function applySearchFromInput() {
+    const raw = quickAddInput.value;
+    const next = raw.trim().toLowerCase();
+    const changed = next !== searchQuery;
+    searchQuery = next;
+    if (quickAddForm) quickAddForm.classList.toggle('is-searching', !!searchQuery);
+    if (quickAddClear) quickAddClear.hidden = !raw;
+    if (changed) renderTasks();
   }
 
   if (tasksSortEl) {
@@ -620,6 +697,7 @@ export function mountUi({ store, skyline, modals }) {
     const t = createTask(store, value, districtId);
     if (t) {
       quickAddInput.value = '';
+      applySearchFromInput();
       if (activeDistrictId !== districtId) {
         setActiveDistrict(districtId);
       }
