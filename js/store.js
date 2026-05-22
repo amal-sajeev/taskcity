@@ -1,8 +1,16 @@
 // Note: layout.js is intentionally not imported here so that migration logic
 // is self-contained against future layout changes.
+//
+// The store is offline-first: every mutator updates the in-memory state,
+// persists to localStorage, notifies subscribers, and (when sync.js has been
+// wired) enqueues a sync operation. Sync.js pulls remote changes and pushes
+// them back into the store via `applyRemote` / `applyRemoteMeta`, which set
+// `__skipSync = true` so the change doesn't bounce back to the server.
+
+import * as sync from './sync.js';
 
 const KEY = 'citylog_data';
-const VERSION = 5;
+const VERSION = 6;
 const DEFAULT_SETTINGS = { sound: false, haptics: true, motion: 'auto', showCompletedInTasks: false };
 export const INITIAL_DISTRICT_SIZE = 3;
 
@@ -52,7 +60,8 @@ function seedDefaults(data) {
         color: d.color,
         order: i,
         size: INITIAL_DISTRICT_SIZE,
-        createdAt: nowIso()
+        createdAt: nowIso(),
+        updatedAt: nowIso()
       });
     });
   }
@@ -131,12 +140,23 @@ function migrate(data) {
   }
 
   if (fromVersion < 5) {
-    // v5 introduces the 'in_progress' task status with a locked cell+building.
-    // No existing rows match that state, so this is just a version bump.
     for (const t of data.tasks) {
       if (t.status !== 'pending' && t.status !== 'complete') {
         t.status = 'pending';
       }
+    }
+  }
+
+  if (fromVersion < 6) {
+    // v6 introduces updatedAt / deletedAt for sync.
+    const now = nowIso();
+    for (const d of data.districts) {
+      if (!d.updatedAt) d.updatedAt = d.createdAt || now;
+      if (d.deletedAt === undefined) d.deletedAt = null;
+    }
+    for (const t of data.tasks) {
+      if (!t.updatedAt) t.updatedAt = t.completedAt || t.startedAt || t.createdAt || now;
+      if (t.deletedAt === undefined) t.deletedAt = null;
     }
   }
 
@@ -163,6 +183,35 @@ function persist() {
       console.error('store persist error', err);
     }
   }
+}
+
+// Helpers used by mutators to keep updatedAt fresh and enqueue sync ops.
+function touchTask(t) { t.updatedAt = nowIso(); return t; }
+function touchDistrict(d) { d.updatedAt = nowIso(); return d; }
+
+function pushTaskSync(task, kind = 'upsert') {
+  try { sync.enqueue({ table: 'tasks', kind, payload: task }); }
+  catch (err) { /* sync not ready yet; that's fine */ }
+}
+
+function pushDistrictSync(district, kind = 'upsert') {
+  try { sync.enqueue({ table: 'districts', kind, payload: district }); }
+  catch (err) { /* sync not ready yet; that's fine */ }
+}
+
+function pushMetaSync() {
+  try { sync.enqueue({ table: 'user_meta', kind: 'upsert', payload: serializeMeta(_state.meta) }); }
+  catch (err) { /* sync not ready yet; that's fine */ }
+}
+
+function serializeMeta(meta) {
+  // Only sync the parts that are useful cross-device. cursors/events are
+  // per-device caches and stay local.
+  return {
+    installSeed: meta.installSeed,
+    activeTab: meta.activeTab,
+    settings: meta.settings
+  };
 }
 
 export const store = {
@@ -218,29 +267,41 @@ export const store = {
     return () => _listeners.delete(fn);
   },
 
+  // Public hook so sync.js can batch a sequence of silent applyRemote() calls
+  // and trigger a single UI repaint at the end.
+  notifySubscribers() { notify(); },
+
   getDistricts() {
-    return [..._state.districts].sort((a, b) => a.order - b.order);
+    return _state.districts
+      .filter(d => !d.deletedAt)
+      .sort((a, b) => a.order - b.order);
   },
 
   getDistrict(id) {
-    return _state.districts.find(d => d.id === id) || null;
+    const d = _state.districts.find(x => x.id === id) || null;
+    return d && !d.deletedAt ? d : null;
   },
 
   addDistrict(name, color) {
-    const order = _state.districts.length === 0
+    const visible = _state.districts.filter(d => !d.deletedAt);
+    const order = visible.length === 0
       ? 0
-      : Math.max(..._state.districts.map(d => d.order)) + 1;
+      : Math.max(...visible.map(d => d.order)) + 1;
+    const now = nowIso();
     const district = {
       id: uuid(),
       name: String(name || 'Untitled').trim().slice(0, 40),
       color: color || '#00f5ff',
       order,
       size: INITIAL_DISTRICT_SIZE,
-      createdAt: nowIso()
+      createdAt: now,
+      updatedAt: now,
+      deletedAt: null
     };
     _state.districts.push(district);
     persist();
     notify();
+    pushDistrictSync(district);
     return district;
   },
 
@@ -248,13 +309,17 @@ export const store = {
     const d = _state.districts.find(x => x.id === districtId);
     if (!d) return false;
     if (typeof d.size !== 'number') d.size = INITIAL_DISTRICT_SIZE;
-    const count = _state.tasks.filter(t => t.districtId === districtId).length;
+    const count = _state.tasks.filter(t => t.districtId === districtId && !t.deletedAt).length;
     let grew = false;
     while (count > d.size * d.size) {
       d.size += 1;
       grew = true;
     }
-    if (grew) persist();
+    if (grew) {
+      touchDistrict(d);
+      persist();
+      pushDistrictSync(d);
+    }
     return grew;
   },
 
@@ -262,6 +327,7 @@ export const store = {
     if (!_state.meta) _state.meta = {};
     _state.meta.activeTab = tab;
     persist();
+    pushMetaSync();
   },
 
   updateDistrict(id, patch) {
@@ -270,15 +336,21 @@ export const store = {
     if (patch.name !== undefined) d.name = String(patch.name).trim().slice(0, 40);
     if (patch.color !== undefined) d.color = patch.color;
     if (patch.order !== undefined) d.order = patch.order;
+    touchDistrict(d);
     persist();
     notify();
+    pushDistrictSync(d);
     return d;
   },
 
   reorderDistricts(orderedIds) {
     orderedIds.forEach((id, i) => {
       const d = _state.districts.find(x => x.id === id);
-      if (d) d.order = i;
+      if (d) {
+        d.order = i;
+        touchDistrict(d);
+        pushDistrictSync(d);
+      }
     });
     _state.meta.events.push({ type: 'districtReorder', at: nowIso() });
     persist();
@@ -286,26 +358,38 @@ export const store = {
   },
 
   removeDistrict(id) {
-    const hasTasks = _state.tasks.some(t => t.districtId === id);
+    const hasTasks = _state.tasks.some(t => t.districtId === id && !t.deletedAt);
     if (hasTasks) {
       return { ok: false, reason: 'has_tasks' };
     }
-    _state.districts = _state.districts.filter(d => d.id !== id);
+    const d = _state.districts.find(x => x.id === id);
+    if (!d) return { ok: false, reason: 'not_found' };
+    d.deletedAt = nowIso();
+    touchDistrict(d);
     delete _state.meta.cursors[id];
     persist();
     notify();
+    pushDistrictSync(d, 'delete');
     return { ok: true };
   },
 
   reassignAndRemoveDistrict(id, targetId) {
     if (id === targetId) return { ok: false, reason: 'same_target' };
-    if (!_state.districts.find(d => d.id === targetId)) {
-      return { ok: false, reason: 'no_target' };
-    }
+    const target = _state.districts.find(d => d.id === targetId && !d.deletedAt);
+    if (!target) return { ok: false, reason: 'no_target' };
     _state.tasks.forEach(t => {
-      if (t.districtId === id) t.districtId = targetId;
+      if (t.districtId === id && !t.deletedAt) {
+        t.districtId = targetId;
+        touchTask(t);
+        pushTaskSync(t);
+      }
     });
-    _state.districts = _state.districts.filter(d => d.id !== id);
+    const d = _state.districts.find(x => x.id === id);
+    if (d) {
+      d.deletedAt = nowIso();
+      touchDistrict(d);
+      pushDistrictSync(d, 'delete');
+    }
     delete _state.meta.cursors[id];
     persist();
     notify();
@@ -313,14 +397,14 @@ export const store = {
   },
 
   getTasks(districtId) {
-    if (districtId) {
-      return _state.tasks.filter(t => t.districtId === districtId);
-    }
-    return [..._state.tasks];
+    const all = _state.tasks.filter(t => !t.deletedAt);
+    if (districtId) return all.filter(t => t.districtId === districtId);
+    return all;
   },
 
   getTask(id) {
-    return _state.tasks.find(t => t.id === id) || null;
+    const t = _state.tasks.find(x => x.id === id) || null;
+    return t && !t.deletedAt ? t : null;
   },
 
   addTask(title, districtId) {
@@ -334,12 +418,15 @@ export const store = {
       startedAt: null,
       completedAt: null,
       building: null,
-      priority: now
+      priority: now,
+      updatedAt: now,
+      deletedAt: null
     };
     _state.tasks.push(task);
     this.growDistrictIfNeeded(districtId);
     persist();
     notify();
+    pushTaskSync(task);
     return task;
   },
 
@@ -349,8 +436,10 @@ export const store = {
     task.status = 'in_progress';
     task.startedAt = nowIso();
     task.building = buildingData;
+    touchTask(task);
     persist();
     notify();
+    pushTaskSync(task);
     return task;
   },
 
@@ -362,38 +451,52 @@ export const store = {
     if (!task.building) task.building = buildingData;
     task.status = 'complete';
     task.completedAt = nowIso();
+    touchTask(task);
     persist();
     notify();
+    pushTaskSync(task);
     return task;
   },
 
   deleteTask(id) {
-    const idx = _state.tasks.findIndex(t => t.id === id);
-    if (idx === -1) return null;
-    const removed = _state.tasks.splice(idx, 1)[0];
-    const snapshot = { task: JSON.parse(JSON.stringify(removed)), index: idx };
+    const t = _state.tasks.find(x => x.id === id);
+    if (!t) return null;
+    const idx = _state.tasks.indexOf(t);
+    const snapshot = { task: JSON.parse(JSON.stringify(t)), index: idx };
+    t.deletedAt = nowIso();
+    touchTask(t);
     persist();
     notify();
+    pushTaskSync(t, 'delete');
     return snapshot;
   },
 
   restoreTask(snapshot) {
     if (!snapshot || !snapshot.task) return null;
-    if (_state.tasks.some(t => t.id === snapshot.task.id)) return null;
-    const idx = Math.min(snapshot.index, _state.tasks.length);
-    _state.tasks.splice(idx, 0, snapshot.task);
-    this.growDistrictIfNeeded(snapshot.task.districtId);
+    const existing = _state.tasks.find(t => t.id === snapshot.task.id);
+    const restored = { ...snapshot.task, deletedAt: null };
+    touchTask(restored);
+    if (existing) {
+      Object.assign(existing, restored);
+    } else {
+      const idx = Math.min(snapshot.index, _state.tasks.length);
+      _state.tasks.splice(idx, 0, restored);
+    }
+    this.growDistrictIfNeeded(restored.districtId);
     persist();
     notify();
-    return snapshot.task;
+    pushTaskSync(restored);
+    return restored;
   },
 
   setPriority(id, priority) {
     const t = _state.tasks.find(x => x.id === id);
     if (!t) return null;
     t.priority = priority;
+    touchTask(t);
     persist();
     notify();
+    pushTaskSync(t);
     return t;
   },
 
@@ -401,7 +504,11 @@ export const store = {
     const base = Date.now();
     orderedIds.forEach((id, i) => {
       const t = _state.tasks.find(x => x.id === id);
-      if (t) t.priority = new Date(base + i).toISOString();
+      if (t) {
+        t.priority = new Date(base + i).toISOString();
+        touchTask(t);
+        pushTaskSync(t);
+      }
     });
     persist();
     notify();
@@ -432,6 +539,86 @@ export const store = {
   reset() {
     _state = emptyData();
     seedDefaults(_state);
+    persist();
+    notify();
+  },
+
+  // Empty the local cache WITHOUT re-seeding the default districts. Used by
+  // the sign-in flow so we don't merge fresh locally-generated defaults on
+  // top of whatever the server already holds.
+  clear() {
+    _state = emptyData();
+    persist();
+    notify();
+  },
+
+  seedDefaultsIfEmpty() {
+    if (_state.districts.filter(d => !d.deletedAt).length === 0) {
+      seedDefaults(_state);
+      persist();
+      notify();
+    }
+  },
+
+  // ── Snapshot helpers for sync.js ────────────────────────────────────────
+
+  exportSnapshot() {
+    // Strips per-device meta (cursors, events) so the import is clean across
+    // devices.
+    return {
+      districts: _state.districts.filter(d => !d.deletedAt).map(d => ({ ...d })),
+      tasks: _state.tasks.filter(t => !t.deletedAt).map(t => ({ ...t })),
+      meta: serializeMeta(_state.meta)
+    };
+  },
+
+  // ── Remote merge (called by sync.js, does NOT re-enqueue) ──────────────
+
+  applyRemote(table, row, opts = {}) {
+    if (!row || !row.id) return;
+    if (table === 'tasks') {
+      const existing = _state.tasks.find(t => t.id === row.id);
+      if (existing) {
+        // Last-write-wins per row by updatedAt.
+        if (!existing.updatedAt || (row.updatedAt && row.updatedAt >= existing.updatedAt)) {
+          Object.assign(existing, row);
+        }
+      } else {
+        _state.tasks.push({ ...row });
+      }
+      persist();
+      if (!opts.silent) notify();
+    } else if (table === 'districts') {
+      const existing = _state.districts.find(d => d.id === row.id);
+      if (existing) {
+        if (!existing.updatedAt || (row.updatedAt && row.updatedAt >= existing.updatedAt)) {
+          Object.assign(existing, row);
+        }
+      } else {
+        _state.districts.push({ ...row });
+      }
+      persist();
+      if (!opts.silent) notify();
+    }
+  },
+
+  applyRemoteMeta(metaData) {
+    if (!metaData || typeof metaData !== 'object') return;
+    if (!_state.meta) _state.meta = {};
+    if (metaData.installSeed != null) _state.meta.installSeed = metaData.installSeed;
+    if (metaData.activeTab) _state.meta.activeTab = metaData.activeTab;
+    if (metaData.settings) {
+      _state.meta.settings = { ...DEFAULT_SETTINGS, ..._state.meta.settings, ...metaData.settings };
+    }
+    persist();
+    notify();
+  },
+
+  // Replace the entire local cache (used when signing in as a different user).
+  replaceState(next) {
+    _state = next || emptyData();
+    seedDefaults(_state);
+    migrate(_state);
     persist();
     notify();
   }

@@ -1,5 +1,9 @@
-const CACHE = 'citylog-v8';
+const CACHE = 'citylog-v10';
 
+// The static app shell. Everything the frontend loads at boot lives here.
+// No third-party CDNs anymore (apart from the Google Fonts the document
+// references directly, which the browser handles independently). The API
+// routes are NEVER cached.
 const ASSETS = [
   './',
   './index.html',
@@ -17,6 +21,7 @@ const ASSETS = [
   './css/views.css',
   './css/stats.css',
   './css/animations.css',
+  './css/auth.css',
   './js/main.js',
   './js/store.js',
   './js/sheet.js',
@@ -35,21 +40,26 @@ const ASSETS = [
   './js/keyboard.js',
   './js/router.js',
   './js/stats.js',
+  './js/sync.js',
+  './js/auth.js',
+  './js/api.js',
   './icons/icon-192.png',
   './icons/icon-512.png'
 ];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(CACHE).then((cache) => cache.addAll(ASSETS)).then(() => self.skipWaiting())
+    caches.open(CACHE)
+      .then((cache) => cache.addAll(ASSETS))
+      .then(() => self.skipWaiting())
   );
 });
 
 self.addEventListener('activate', (event) => {
   event.waitUntil(
-    caches.keys().then((keys) =>
-      Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k)))
-    ).then(() => self.clients.claim())
+    caches.keys()
+      .then((keys) => Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k))))
+      .then(() => self.clients.claim())
   );
 });
 
@@ -58,6 +68,14 @@ self.addEventListener('fetch', (event) => {
   if (req.method !== 'GET') return;
 
   const url = new URL(req.url);
+
+  // /api/* is dynamic, per-user, and must never be cached. Let the browser
+  // talk straight to the network so cookies + freshness are honored.
+  if (url.origin === self.location.origin && url.pathname.startsWith('/api/')) {
+    return;
+  }
+
+  // Other cross-origin (Google Fonts, etc.): network-first with cache fallback.
   if (url.origin !== self.location.origin) {
     event.respondWith(
       fetch(req).catch(() => caches.match(req))
@@ -65,6 +83,7 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
+  // Same-origin app shell: cache-first, with network refill on miss.
   event.respondWith(
     caches.match(req).then((cached) => {
       if (cached) return cached;

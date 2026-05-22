@@ -1,0 +1,13 @@
+{
+  "name": "citylog-api",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Serverless API routes for CITYLOG. The browser-facing app under /css, /js, /index.html is vanilla and intentionally not built or bundled; this package.json exists only so Vercel installs the dependencies that the /api/ functions need at deploy time.",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@vercel/postgres": "^0.10.0"
+  }
+}

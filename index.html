@@ -30,6 +30,7 @@
   <link rel="stylesheet" href="css/views.css" />
   <link rel="stylesheet" href="css/stats.css" />
   <link rel="stylesheet" href="css/animations.css" />
+  <link rel="stylesheet" href="css/auth.css" />
 </head>
 <body data-tab="city">
   <canvas id="skyline" aria-label="City skyline"></canvas>
@@ -58,6 +59,10 @@
         <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
           <path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" d="M3 21V9l5-4 5 4v12M13 21V12l4-3 4 3v9M3 21h18"/>
         </svg>
+      </button>
+      <button type="button" class="account-chip" id="btn-account" aria-label="Account" title="Account" hidden>
+        <span class="account-chip__dot" aria-hidden="true"></span>
+        <span class="account-chip__label" id="account-chip-label">offline</span>
       </button>
     </div>
   </header>
@@ -204,6 +209,68 @@
       <button type="button" class="btn" autofocus onclick="document.getElementById('kbd-help').close()">Close</button>
     </div>
   </dialog>
+
+  <section class="login-view" id="login-view" aria-label="Sign in" hidden>
+    <div class="login-card hud-scan">
+      <div class="login-card__brand">
+        <span class="hud-hex" aria-hidden="true"></span>
+        <span class="login-card__title shimmer">CITYLOG</span>
+      </div>
+      <p class="login-card__lede" id="login-lede">Build your city across every device.</p>
+
+      <form class="login-form" id="login-form" autocomplete="off">
+        <label class="login-form__label" for="login-email">EMAIL</label>
+        <input
+          type="email"
+          id="login-email"
+          class="login-form__input"
+          placeholder="commander@city.log"
+          autocomplete="email"
+          required
+        />
+        <label class="login-form__label" for="login-password">PASSWORD</label>
+        <input
+          type="password"
+          id="login-password"
+          class="login-form__input"
+          placeholder="at least 6 characters"
+          autocomplete="current-password"
+          minlength="6"
+          required
+        />
+        <button type="submit" class="login-form__submit" id="login-submit">
+          <span class="login-form__submit-label" id="login-submit-label">Sign in</span>
+        </button>
+        <p class="login-form__status" id="login-status" aria-live="polite"></p>
+      </form>
+
+      <p class="login-form__toggle">
+        <span id="login-toggle-prompt">New here?</span>
+        <button type="button" class="login-form__toggle-btn" id="login-toggle" data-mode="signin">
+          Create an account
+        </button>
+      </p>
+
+      <p class="login-card__note">
+        Your data is stored on Vercel Postgres and scoped to your account.
+        Sign in from any device to pick up where you left off &mdash; the app
+        keeps working offline and syncs back when you reconnect.
+      </p>
+    </div>
+  </section>
+
+  <div class="account-menu" id="account-menu" role="menu" aria-label="Account menu" hidden>
+    <div class="account-menu__head">
+      <div class="account-menu__avatar" id="account-avatar" aria-hidden="true">@</div>
+      <div class="account-menu__id">
+        <span class="account-menu__email" id="account-email">&mdash;</span>
+        <span class="account-menu__status" id="account-status">Connected</span>
+      </div>
+    </div>
+    <button type="button" class="account-menu__item" id="account-signout" role="menuitem">
+      Sign out
+    </button>
+  </div>
 
   <script type="module" src="js/main.js"></script>
 </body>
